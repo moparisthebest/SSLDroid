@@ -16,10 +16,11 @@ import java.security.UnrecoverableKeyException;
 import javax.net.ssl.KeyManagerFactory;
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLSocket;
-import javax.net.ssl.SSLSocketFactory;
 import javax.net.ssl.TrustManager;
 import javax.net.ssl.X509TrustManager;
 
+import android.net.SSLCertificateSocketFactory;
+import android.os.Build;
 import android.util.Log;
 
 public class TcpProxyServerThread extends Thread {
@@ -32,7 +33,7 @@ public class TcpProxyServerThread extends Thread {
     Relay inRelay, outRelay;
     ServerSocket ss = null;
     int sessionid = 0;
-    private SSLSocketFactory sslSocketFactory;
+    private SSLCertificateSocketFactory sslSocketFactory;
 
     public TcpProxyServerThread(ServerSocket ss,String tunnelName, int listenPort, String tunnelHost, int tunnelPort, String keyFile, String keyPass) {
         this.tunnelName = tunnelName;
@@ -61,7 +62,7 @@ public class TcpProxyServerThread extends Thread {
     }
     };
 
-    public final SSLSocketFactory getSocketFactory(String pkcsFile,
+    public final SSLCertificateSocketFactory getSocketFactory(String pkcsFile,
             String pwd, int sessionid) {
         if (sslSocketFactory == null) {
             try {
@@ -72,8 +73,7 @@ public class TcpProxyServerThread extends Thread {
                 SSLContext context = SSLContext.getInstance("TLS");
                 context.init(keyManagerFactory.getKeyManagers(), trustAllCerts,
                              new SecureRandom());
-                sslSocketFactory = (SSLSocketFactory) context.getSocketFactory();
-
+                sslSocketFactory = (SSLCertificateSocketFactory) context.getSocketFactory();
             } catch (FileNotFoundException e) {
                 Log.d("SSLDroid", tunnelName+"/"+sessionid+": Error loading the client certificate file:"
                       + e.toString());
@@ -115,8 +115,13 @@ public class TcpProxyServerThread extends Thread {
                 }
 
                 Socket st = null;
+                SSLCertificateSocketFactory sf = null;
                 try {
-                    st = (SSLSocket) getSocketFactory(this.keyFile, this.keyPass, this.sessionid).createSocket(this.tunnelHost, this.tunnelPort);
+                    sf = (SSLCertificateSocketFactory) getSocketFactory(this.keyFile, this.keyPass, this.sessionid);
+                    st = (SSLSocket) sf.createSocket(this.tunnelHost, this.tunnelPort);
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.JELLY_BEAN_MR1) {
+                        sf.setHostname(st, this.tunnelHost);
+                    }
                     ((SSLSocket) st).startHandshake();
                 } catch (IOException e) {
                     Log.d("SSLDroid", tunnelName+"/"+sessionid+": SSL failure: " + e.toString());
